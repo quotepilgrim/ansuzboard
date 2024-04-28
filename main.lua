@@ -12,17 +12,23 @@ local highlight
 local grabbed_piece = ""
 local drop_piece = false
 local grabbed_x, grabbed_y
-local timer = 0
 local dragging = false
-local threshold = 0.1
+local threshold = square_width * 0.1
 local select_mode = false
 local flip_board = false
+local mouse_x, mouse_y = 0, 0
 
 local piece_selector = {
     { "bp", "bn", "bb", "br", "bq", "bk" },
     { "wp", "wn", "wb", "wr", "wq", "wk" },
     { "_x" },
 }
+
+local function distance(x1, y1, x2, y2)
+    local dx = x1 - x2
+    local dy = y1 - y2
+    return math.sqrt(dx * dx + dy * dy)
+end
 
 local function get_coords(x, y)
     local ox, oy = offset_x, offset_y
@@ -35,7 +41,7 @@ local function get_coords(x, y)
     local by = 1 + math.floor((y - oy) / square_width)
     if not select_mode and flip_board then
         bx = #board[1] + 1 - bx
-        by = #board[1] + 1 - by
+        by = #board + 1 - by
     end
     return bx, by
 end
@@ -251,15 +257,12 @@ function love.load()
 end
 
 function love.update(dt)
-    timer = timer + dt
-    if love.mouse.isDown(1) and timer > threshold then
+    if love.mouse.isDown(1) and distance(mouse_x, mouse_y, love.mouse.getX(), love.mouse.getY()) > threshold then
         dragging = true
         if grabbed_x then
             board[grabbed_y][grabbed_x] = ""
         end
-    elseif love.mouse.isDown(2, 3) and timer > threshold then
-        dragging = true
-    else
+    elseif not love.mouse.isDown(1) then
         dragging = false
     end
 end
@@ -411,6 +414,8 @@ function love.mousepressed(x, y, button)
     end
 
     if button == 1 then
+        mouse_x = love.mouse.getX()
+        mouse_y = love.mouse.getY()
         move_piece(bx, by)
     elseif grabbed_piece ~= "" then
         move_piece(bx, by)
