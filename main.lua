@@ -252,6 +252,7 @@ function love.load()
     colors.light_square = { 240 / 255, 217 / 255, 181 / 255 }
     colors.highlight = { 0.25, 1, 1, 0.5 }
     colors.move_highlight = { 1, 0.7, 0.2, 0.5 }
+    colors.selector = colors.dark_square
 
     init_board()
 end
@@ -315,7 +316,7 @@ function love.draw()
         love.graphics.rectangle("fill", offset_x, offset_y, square_width * board_width, square_width * board_height)
         for y, _ in ipairs(piece_selector) do
             for x, v in ipairs(piece_selector[y]) do
-                love.graphics.setColor(colors.dark_square)
+                love.graphics.setColor(colors.selector)
                 draw_square(x, y, selector_offset_x, selector_offset_y)
 
                 love.graphics.setColor(1, 1, 1)
@@ -403,6 +404,9 @@ function love.mousepressed(x, y, button)
     end
 
     if not drop_piece and (love.keyboard.isDown("lshift", "rshift") or button == 3) then
+        if board[by][bx] == "" then
+            return
+        end
         drop_piece = true
         grabbed_piece = board[by][bx]
         if grabbed_piece == "" then
