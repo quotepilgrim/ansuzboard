@@ -256,14 +256,17 @@ function love.load()
     init_board()
 end
 
-function love.update(dt)
-    if love.mouse.isDown(1) and distance(mouse_x, mouse_y, love.mouse.getX(), love.mouse.getY()) > threshold then
+function love.update()
+    if love.mouse.isDown(1, 2, 3) and distance(mouse_x, mouse_y, love.mouse.getX(), love.mouse.getY()) > threshold then
         dragging = true
         if grabbed_x then
             board[grabbed_y][grabbed_x] = ""
         end
     elseif not love.mouse.isDown(1) then
         dragging = false
+    end
+    if dragging then
+        select_mode = false
     end
 end
 
@@ -376,7 +379,8 @@ end
 
 function love.mousepressed(x, y, button)
     local bx, by = get_coords(x, y)
-    timer = 0
+    mouse_x = love.mouse.getX()
+    mouse_y = love.mouse.getY()
 
     if select_mode then
         if bx > #piece_selector[1] or by > #piece_selector or bx < 1 or by < 1 then
@@ -391,8 +395,6 @@ function love.mousepressed(x, y, button)
 
         drop_piece = true
         grabbed_piece = piece_selector[by][bx]
-        timer = 0
-        select_mode = false
         return
     end
 
@@ -401,11 +403,11 @@ function love.mousepressed(x, y, button)
     end
 
     if not drop_piece and (love.keyboard.isDown("lshift", "rshift") or button == 3) then
+        drop_piece = true
         grabbed_piece = board[by][bx]
         if grabbed_piece == "" then
             return
         end
-        drop_piece = true
         if button == 1 then
             grabbed_piece = ""
             move_piece(bx, by)
@@ -413,18 +415,19 @@ function love.mousepressed(x, y, button)
         return
     end
 
-    if button == 1 then
-        mouse_x = love.mouse.getX()
-        mouse_y = love.mouse.getY()
-        move_piece(bx, by)
-    elseif grabbed_piece ~= "" then
+    if button == 1 or drop_piece then
         move_piece(bx, by)
     elseif button == 2 then
         set_highlight(bx, by)
+        grabbed_x, grabbed_y = nil, nil
     end
 end
 
 function love.mousereleased(x, y, button)
+    if select_mode then
+        select_mode = false
+        return
+    end
     local bx, by = get_coords(x, y)
     if not dragging or grabbed_piece == "" then
         return
@@ -436,6 +439,7 @@ end
 
 function love.resize(w, h)
     square_width = math.min(w / board_width, h / board_height)
+    threshold = square_width * 0.1
     if w / board_width > h / board_height then
         offset_x = w / 2 - board_width * square_width / 2
         offset_y = 0
