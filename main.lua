@@ -154,9 +154,14 @@ local function init_board(fen)
     end
 
     local row, col = 1, 1
-    for i = 1, #fen do
+    local i = 1
+    while i < #fen do
         local p = fen:sub(i, i)
         if tonumber(p) then
+            while tonumber(fen:sub(i + 1, i + 1)) do
+                p = p .. fen:sub(i + 1, i + 1)
+                i = i + 1
+            end
             col = (col + tonumber(p) - 1) % board_width + 1
             p = nil
         elseif p == "/" then
@@ -175,6 +180,7 @@ local function init_board(fen)
             board[row][col] = p
             col = col % board_width + 1
         end
+        i = i + 1
     end
 end
 
