@@ -138,31 +138,26 @@ local function draw_image(image, x, y, ox, oy, mode)
     love.graphics.draw(image, (x - 1) * multiplier + ox, (y - 1) * multiplier + oy, 0, square_width / image:getWidth())
 end
 
-local function init_board(fen)
-    board = {}
+local function load_fen(board_, fen)
     fen = fen or "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+    local bw, bh = #board_[1], #board_
 
-    for i = 1, board_height do
-        board[i] = {}
-        highlighted_squares[i] = {}
-        highlighted_move[i] = {}
-        for j = 1, board_width do
-            board[i][j] = ""
-            highlighted_squares[i][j] = false
-            highlighted_move[i][j] = false
+    for i = 1, bh do
+        for j = 1, bw do
+            board_[i][j] = ""
         end
     end
 
     local row, col = 1, 1
     local i = 1
-    while i < #fen do
+    while i <= #fen do
         local p = fen:sub(i, i)
         if tonumber(p) then
             while tonumber(fen:sub(i + 1, i + 1)) do
                 p = p .. fen:sub(i + 1, i + 1)
                 i = i + 1
             end
-            col = (col + tonumber(p) - 1) % board_width + 1
+            col = col + tonumber(p)
             p = nil
         elseif p == "/" then
             row = row + 1
@@ -171,37 +166,39 @@ local function init_board(fen)
         elseif p == " " then
             break
         end
+
         if p and p == p:upper() then
             p = "w" .. p:lower()
         elseif p then
             p = "b" .. p
         end
-        if p and row <= board_height and col <= board_width then
-            board[row][col] = p
-            col = col % board_width + 1
+
+        if p and row <= bh and col <= bw then
+            board_[row][col] = p
+            col = col + 1
         end
         i = i + 1
     end
 end
 
-local function generate_fen()
+local function generate_fen(board_)
     local count = 0
     local result = ""
 
     local castling = ""
-    if board[8][5] == "wk" then
-        if board[8][8] == "wr" then
+    if board_[8][5] == "wk" then
+        if board_[8][8] == "wr" then
             castling = castling .. "K"
         end
-        if board[8][1] == "wr" then
+        if board_[8][1] == "wr" then
             castling = castling .. "Q"
         end
     end
-    if board[1][5] == "bk" then
-        if board[1][8] == "br" then
+    if board_[1][5] == "bk" then
+        if board_[1][8] == "br" then
             castling = castling .. "k"
         end
-        if board[1][1] == "br" then
+        if board_[1][1] == "br" then
             castling = castling .. "q"
         end
     end
@@ -215,7 +212,8 @@ local function generate_fen()
             count = 0
         end
     end
-    for i, row in ipairs(board) do
+
+    for i, row in ipairs(board_) do
         for _, p in ipairs(row) do
             if p ~= "" then
                 if p:sub(1, 1) == "w" then
@@ -230,12 +228,31 @@ local function generate_fen()
             result = result .. p
         end
         write_count()
-        if i < #board then
+        if i < #board_ then
             result = result .. "/"
         end
     end
     result = result .. " w " .. castling .. " - 0 1"
     return result
+end
+
+local function new_board(bw, bh, fen)
+    local board_ = {}
+
+    for i = 1, bh do
+        board_[i] = {}
+        highlighted_squares[i] = {}
+        highlighted_move[i] = {}
+        for j = 1, bw do
+            board_[i][j] = ""
+            highlighted_squares[i][j] = false
+            highlighted_move[i][j] = false
+        end
+    end
+
+    load_fen(board_, fen)
+
+    return board_
 end
 
 function love.load()
@@ -260,10 +277,12 @@ function love.load()
     colors.move_highlight = { 1, 0.7, 0.2, 0.5 }
     colors.selector = colors.dark_square
 
-    init_board()
+    board = new_board(board_width, board_height)
 end
 
-function love.update()
+local timer = 0
+function love.update(dt)
+    timer = timer + dt
     if love.mouse.isDown(1, 2, 3) and distance(mouse_x, mouse_y, love.mouse.getX(), love.mouse.getY()) > threshold then
         dragging = true
         if grabbed_x then
@@ -341,7 +360,7 @@ function love.keypressed(key)
     if key == "escape" then
         love.event.quit()
     elseif key == "r" then
-        init_board()
+        board = new_board(board_width, board_height)
     elseif key == "f" then
         flip_board = not flip_board
     elseif key == "s" or key == "tab" then
@@ -362,7 +381,7 @@ function love.keypressed(key)
         else
             board_width = board_width + 1
         end
-        init_board("")
+        board = new_board(board_width, board_height, "")
         square_width = math.min(width / board_width, height / board_height)
         love.resize(width, height)
     elseif key == "-" then
@@ -371,16 +390,16 @@ function love.keypressed(key)
         else
             board_width = board_width - 1
         end
-        init_board("")
+        board = new_board(board_width, board_height, "")
         square_width = math.min(width / board_width, height / board_height)
         love.resize(width, height)
     elseif key == "c" then
-        fen = generate_fen()
+        fen = generate_fen(board)
         love.system.setClipboardText(fen)
         print(fen)
     elseif key == "v" then
         fen = love.system.getClipboardText()
-        init_board(fen)
+        load_fen(board, fen)
     end
 end
 

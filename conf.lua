@@ -1,5 +1,5 @@
 function love.conf(t)
-    t.window.title = "Chess"
+    t.window.title = "Ansuzboard"
     t.window.width = 800
     t.window.height = 800
     t.window.minwidth = 400
