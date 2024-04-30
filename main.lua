@@ -324,8 +324,6 @@ local function communicate()
 end
 
 function love.load()
-    ip = "localhost"
-    port = "8000"
     if is_server then
         host = enet.host_create(ip .. ":" .. port)
     elseif is_client then
