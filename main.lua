@@ -298,16 +298,17 @@ local function communicate()
     local event = host:service(100)
     local count, fen, add_hl
     if event then
-        if event.type == "connect" then
+        if is_server and event.type == "connect" then
             print(event.peer, "connected.")
             event.peer:send("")
         elseif event.type == "receive" then
+            for a, b in string.gmatch(event.data, "([^%s]+)|([^%s]+)") do
+                count, fen = tonumber(a), b
+            end
             event.peer:send(tostring(move_counter) .. "|" .. generate_fen(board))
+        elseif event.type == "disconnect" then
+            print(event.peer, "disconnected.")
         end
-        for a, b in string.gmatch(event.data, "([^%s]+)|([^%s]+)") do
-            count, fen = a, b
-        end
-        print(count, fen)
     end
     if last_fen ~= fen then
         add_hl = true
@@ -315,9 +316,9 @@ local function communicate()
     else
         add_hl = false
     end
-    if tonumber(count) and tonumber(count) > move_counter then
+    if count and count > move_counter then
         load_fen(board, fen, add_hl)
-        move_counter = move_counter + 1
+        move_counter = count
     end
     event = host:service()
 end
