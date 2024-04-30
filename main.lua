@@ -3,7 +3,7 @@ local host, is_client, is_server
 local ip = "localhost"
 local port = "8000"
 local board = {}
-local move_counter = 1
+local move_counter = 0
 local highlighted_squares = {}
 local highlighted_move = {}
 local colors = {}
@@ -30,18 +30,19 @@ local piece_selector = {
     { "_x" },
 }
 
-for i, v in ipairs(arg) do
+while #arg > 0 do
+    local v = table.remove(arg, 1)
     if v == "-c" then
         is_client = true
-        if arg[i + 1] and arg[i + 1]:sub(1, 1) ~= "-" then
-            ip = arg[i + 1]
+        if #arg > 0 and arg[1]:sub(1, 1) ~= "-" then
+            ip = table.remove(arg, 1)
         end
     end
     if v == "-s" then
         is_server = true
     end
-    if v == "-p" or "--port" then
-        port = arg[i + 1]
+    if #arg > 0 and v == "-p" then
+        port = table.remove(arg, 1)
     end
 end
 
@@ -110,6 +111,7 @@ local function move_piece(x, y)
         highlighted_move[y][x] = true
         grabbed_piece = ""
         drop_piece = false
+        move_counter = move_counter + 1
     elseif grabbed_piece == "" then
         grabbed_piece = board[y][x]
         grabbed_x, grabbed_y = x, y
@@ -121,12 +123,12 @@ local function move_piece(x, y)
         board[grabbed_y][grabbed_x] = ""
         board[y][x] = grabbed_piece
         grabbed_piece = ""
+        move_counter = move_counter + 1
     end
 
     if grabbed_piece == "" then
         grabbed_x, grabbed_y = nil, nil
     end
-    move_counter = move_counter + 1
 end
 
 local function draw_square(x, y, ox, oy, mode)
@@ -298,14 +300,14 @@ local function communicate()
     if event then
         if event.type == "connect" then
             print(event.peer, "connected.")
-            event.peer:send("ping")
+            event.peer:send("")
         elseif event.type == "receive" then
-            for a, b in string.gmatch(event.data, "(%w+)|([^%s]+)") do
-                count, fen = a, b
-            end
-            print(count, fen)
             event.peer:send(tostring(move_counter) .. "|" .. generate_fen(board))
         end
+        for a, b in string.gmatch(event.data, "([^%s]+)|([^%s]+)") do
+            count, fen = a, b
+        end
+        print(count, fen)
     end
     if last_fen ~= fen then
         add_hl = true
@@ -439,6 +441,7 @@ function love.keypressed(key)
         love.event.quit()
     elseif key == "r" then
         board = new_board(board_width, board_height)
+        move_counter = move_counter + 1
     elseif key == "f" then
         flip_board = not flip_board
     elseif key == "s" or key == "tab" then
@@ -478,6 +481,7 @@ function love.keypressed(key)
     elseif key == "v" then
         fen = love.system.getClipboardText()
         load_fen(board, fen)
+        move_counter = move_counter + 1
     end
 end
 
