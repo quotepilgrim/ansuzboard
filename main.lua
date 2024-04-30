@@ -1,4 +1,9 @@
+local enet = require("enet")
+local host, is_client, is_server
+local ip = "localhost"
+local port = "8000"
 local board = {}
+local move_counter = 1
 local highlighted_squares = {}
 local highlighted_move = {}
 local colors = {}
@@ -17,12 +22,33 @@ local threshold = square_width * 0.1
 local select_mode = false
 local flip_board = false
 local mouse_x, mouse_y = 0, 0
+local msg_x, msg_y = 0, 0
 
 local piece_selector = {
     { "bp", "bn", "bb", "br", "bq", "bk" },
     { "wp", "wn", "wb", "wr", "wq", "wk" },
     { "_x" },
 }
+
+for i, v in ipairs(arg) do
+    if v == "-c" then
+        is_client = true
+        if arg[i + 1] and arg[i + 1]:sub(1, 1) ~= "-" then
+            ip = arg[i + 1]
+        end
+    end
+    if v == "-s" then
+        is_server = true
+    end
+    if v == "-p" or "--port" then
+        port = arg[i + 1]
+    end
+end
+
+if is_server and is_client then
+    print("ERROR: Options '-c' and '-s' can't be used simultaneously'")
+    os.exit()
+end
 
 local function distance(x1, y1, x2, y2)
     local dx = x1 - x2
@@ -100,6 +126,7 @@ local function move_piece(x, y)
     if grabbed_piece == "" then
         grabbed_x, grabbed_y = nil, nil
     end
+    move_counter = move_counter + 1
 end
 
 local function draw_square(x, y, ox, oy, mode)
@@ -255,7 +282,38 @@ local function new_board(bw, bh, fen)
     return board_
 end
 
+local function communicate()
+    local event = host:service(100)
+    local count, fen
+    if event then
+        if event.type == "connect" then
+            print(event.peer, "connected.")
+            event.peer:send("")
+        elseif event.type == "receive" then
+            for a, b in string.gmatch(event.data, "([^%s]+)|([^%s]+)") do
+                count, fen = a, b
+            end
+            print(count, fen)
+            event.peer:send(tostring(move_counter) .. "|" .. generate_fen(board))
+        end
+    end
+    if tonumber(count) and tonumber(count) > move_counter then
+        load_fen(board, fen)
+        move_counter = move_counter + 1
+    end
+    event = host:service()
+end
+
 function love.load()
+    ip = "localhost"
+    port = "8000"
+    if is_server then
+        host = enet.host_create(ip .. ":" .. port)
+    elseif is_client then
+        host = enet.host_create()
+        host:connect(ip .. ":" .. port)
+    end
+
     pieces.wp = love.graphics.newImage("assets/wp.png")
     pieces.wn = love.graphics.newImage("assets/wn.png")
     pieces.wb = love.graphics.newImage("assets/wb.png")
@@ -293,6 +351,10 @@ function love.update(dt)
     end
     if dragging then
         select_mode = false
+    end
+    if host and timer > 0.2 then
+        communicate()
+        timer = 0
     end
 end
 
