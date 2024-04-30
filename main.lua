@@ -22,7 +22,7 @@ local threshold = square_width * 0.1
 local select_mode = false
 local flip_board = false
 local mouse_x, mouse_y = 0, 0
-local msg_x, msg_y = 0, 0
+local last_fen
 
 local piece_selector = {
     { "bp", "bn", "bb", "br", "bq", "bk" },
@@ -165,13 +165,18 @@ local function draw_image(image, x, y, ox, oy, mode)
     love.graphics.draw(image, (x - 1) * multiplier + ox, (y - 1) * multiplier + oy, 0, square_width / image:getWidth())
 end
 
-local function load_fen(board_, fen)
+local function load_fen(board_, fen, add_hl)
     fen = fen or "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
     local bw, bh = #board_[1], #board_
 
-    for i = 1, bh do
-        for j = 1, bw do
-            board_[i][j] = ""
+    local function hl(p, row, col)
+        if not add_hl then
+            return
+        end
+        if board_[row][col] ~= p then
+            highlighted_move[row][col] = true
+        else
+            highlighted_move[row][col] = false
         end
     end
 
@@ -184,7 +189,11 @@ local function load_fen(board_, fen)
                 p = p .. fen:sub(i + 1, i + 1)
                 i = i + 1
             end
-            col = col + tonumber(p)
+            for _ = 1, tonumber(p) do
+                hl("", row, col)
+                board_[row][col] = ""
+                col = col + 1
+            end
             p = nil
         elseif p == "/" then
             row = row + 1
@@ -201,6 +210,7 @@ local function load_fen(board_, fen)
         end
 
         if p and row <= bh and col <= bw then
+            hl(p, row, col)
             board_[row][col] = p
             col = col + 1
         end
@@ -284,21 +294,27 @@ end
 
 local function communicate()
     local event = host:service(100)
-    local count, fen
+    local count, fen, add_hl
     if event then
         if event.type == "connect" then
             print(event.peer, "connected.")
-            event.peer:send("")
+            event.peer:send("ping")
         elseif event.type == "receive" then
-            for a, b in string.gmatch(event.data, "([^%s]+)|([^%s]+)") do
+            for a, b in string.gmatch(event.data, "(%w+)|([^%s]+)") do
                 count, fen = a, b
             end
             print(count, fen)
             event.peer:send(tostring(move_counter) .. "|" .. generate_fen(board))
         end
     end
+    if last_fen ~= fen then
+        add_hl = true
+        last_fen = fen
+    else
+        add_hl = false
+    end
     if tonumber(count) and tonumber(count) > move_counter then
-        load_fen(board, fen)
+        load_fen(board, fen, add_hl)
         move_counter = move_counter + 1
     end
     event = host:service()
