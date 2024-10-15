@@ -49,8 +49,7 @@ while #arg > 0 do
 end
 
 if is_server and is_client then
-    print("ERROR: Options '-c' and '-s' can't be used simultaneously'")
-    os.exit()
+    error("Options '-c' and '-s' can't be used simultaneously'")
 end
 
 local function distance(x1, y1, x2, y2)
@@ -298,17 +297,47 @@ local function new_board(bw, bh, fen)
     return board_
 end
 
-function connect()
+local function connect()
     if not connected then
         peer = host:connect("localhost:" .. port)
         print("Attempting to connect...")
     end
 end
 
+local function handle_event(dt)
+    if is_client then
+        if not connected then
+            last_attempt = last_attempt + dt
+            if last_attempt >= reconnect_time then
+                last_attempt = 0
+                connect()
+            end
+        end
+    elseif not is_server then
+        return
+    end
+
+    local event = host:service(100)
+    while event do
+        if event.type == "connect" then
+            connected = true
+            print("Connected to " .. tostring(event.peer))
+            last_attempt = 0
+        elseif event.type == "receive" then
+            print("Received: " .. event.data)
+            load_fen(board, event.data, true)
+        elseif event.type == "disconnect" then
+            connected = false
+            print("Disconnected from server. Reconnecting...")
+        end
+        event = host:service()
+    end
+end
+
 function send_event()
     if is_server then
         host:broadcast(generate_fen(board, true))
-    else
+    elseif is_client then
         peer:send(generate_fen(board, true))
     end
 end
@@ -318,7 +347,7 @@ function love.load()
         love.window.setTitle("Ansuzboard (Server)")
         host = enet.host_create("localhost:" .. port)
         print("Server started...")
-    else
+    elseif is_client then
         love.window.setTitle("Ansuzboard (Client)")
         host = enet.host_create()
         connect()
@@ -348,9 +377,8 @@ function love.load()
     board = new_board(board_width, board_height)
 end
 
-local timer = 0
+local event_interval = 0
 function love.update(dt)
-    timer = timer + dt
     if love.mouse.isDown(1, 2, 3) and distance(mouse_x, mouse_y, love.mouse.getX(), love.mouse.getY()) > threshold then
         dragging = true
         if grabbed_x then
@@ -359,34 +387,14 @@ function love.update(dt)
     elseif not love.mouse.isDown(1) then
         dragging = false
     end
-    if dragging then
+    if (dragging or drop_piece) then
         select_mode = false
+        return
     end
-
-    if is_client then
-        if not connected then
-            last_attempt = last_attempt + dt
-            if last_attempt >= reconnect_time then
-                last_attempt = 0
-                connect()
-            end
-        end
-    end
-
-    local event = host:service(100)
-    while event do
-        if event.type == "connect" then
-            connected = true
-            print("Connected to " .. tostring(event.peer))
-            last_attempt = 0
-        elseif event.type == "receive" then
-            print("Received: " .. event.data)
-            load_fen(board, event.data, true)
-        elseif event.type == "disconnect" then
-            connected = false
-            print("Disconnected from server. Reconnecting...")
-        end
-        event = host:service()
+    event_interval = event_interval + dt
+    if event_interval > 0.1 then
+        event_interval = event_interval - 0.1
+        handle_event(dt)
     end
 end
 
