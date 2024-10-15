@@ -1,5 +1,5 @@
 local enet = require("enet")
-local host, is_client, is_server
+local host, peer, is_client, is_server
 local ip = "localhost"
 local port = "8000"
 local board = {}
@@ -23,6 +23,8 @@ local select_mode = false
 local flip_board = false
 local mouse_x, mouse_y = 0, 0
 local last_fen
+local last_attempt = 0
+local reconnect_time = 3
 
 local piece_selector = {
     { "bp", "bn", "bb", "br", "bq", "bk" },
@@ -81,11 +83,7 @@ local function set_highlight(x, y)
     end
     grabbed_piece = ""
     grabbed_x = 0
-    if highlighted_squares[y][x] then
-        highlighted_squares[y][x] = false
-    else
-        highlighted_squares[y][x] = true
-    end
+    highlighted_squares[y][x] = not highlighted_squares[y][x]
 end
 
 local function move_piece(x, y)
@@ -112,6 +110,7 @@ local function move_piece(x, y)
         grabbed_piece = ""
         drop_piece = false
         move_counter = move_counter + 1
+        send_event()
     elseif grabbed_piece == "" then
         grabbed_piece = board[y][x]
         grabbed_x, grabbed_y = x, y
@@ -124,6 +123,7 @@ local function move_piece(x, y)
         board[y][x] = grabbed_piece
         grabbed_piece = ""
         move_counter = move_counter + 1
+        send_event()
     end
 
     if grabbed_piece == "" then
@@ -220,7 +220,7 @@ local function load_fen(board_, fen, add_hl)
     end
 end
 
-local function generate_fen(board_)
+local function generate_fen(board_, short)
     local count = 0
     local result = ""
 
@@ -271,7 +271,11 @@ local function generate_fen(board_)
             result = result .. "/"
         end
     end
-    result = result .. " w " .. castling .. " - 0 1"
+
+    if not short then
+        result = result .. " w " .. castling .. " - 0 1"
+    end
+
     return result
 end
 
@@ -294,41 +298,30 @@ local function new_board(bw, bh, fen)
     return board_
 end
 
-local function communicate()
-    local event = host:service(100)
-    local count, fen, add_hl
-    if event then
-        if is_server and event.type == "connect" then
-            print(event.peer, "connected.")
-            event.peer:send("")
-        elseif event.type == "receive" then
-            for a, b in string.gmatch(event.data, "([^%s]+)|([^%s]+)") do
-                count, fen = tonumber(a), b
-            end
-            event.peer:send(tostring(move_counter) .. "|" .. generate_fen(board))
-        elseif event.type == "disconnect" then
-            print(event.peer, "disconnected.")
-        end
+function connect()
+    if not connected then
+        peer = host:connect("localhost:" .. port)
+        print("Attempting to connect...")
     end
-    if last_fen ~= fen then
-        add_hl = true
-        last_fen = fen
+end
+
+function send_event()
+    if is_server then
+        host:broadcast(generate_fen(board, true))
     else
-        add_hl = false
+        peer:send(generate_fen(board, true))
     end
-    if count and count > move_counter then
-        load_fen(board, fen, add_hl)
-        move_counter = count
-    end
-    event = host:service()
 end
 
 function love.load()
     if is_server then
-        host = enet.host_create(ip .. ":" .. port)
-    elseif is_client then
+        love.window.setTitle("Ansuzboard (Server)")
+        host = enet.host_create("localhost:" .. port)
+        print("Server started...")
+    else
+        love.window.setTitle("Ansuzboard (Client)")
         host = enet.host_create()
-        host:connect(ip .. ":" .. port)
+        connect()
     end
 
     pieces.wp = love.graphics.newImage("assets/wp.png")
@@ -369,9 +362,31 @@ function love.update(dt)
     if dragging then
         select_mode = false
     end
-    if host and timer > 0.2 then
-        communicate()
-        timer = 0
+
+    if is_client then
+        if not connected then
+            last_attempt = last_attempt + dt
+            if last_attempt >= reconnect_time then
+                last_attempt = 0
+                connect()
+            end
+        end
+    end
+
+    local event = host:service(100)
+    while event do
+        if event.type == "connect" then
+            connected = true
+            print("Connected to " .. tostring(event.peer))
+            last_attempt = 0
+        elseif event.type == "receive" then
+            print("Received: " .. event.data)
+            load_fen(board, event.data, true)
+        elseif event.type == "disconnect" then
+            connected = false
+            print("Disconnected from server. Reconnecting...")
+        end
+        event = host:service()
     end
 end
 
@@ -441,6 +456,7 @@ function love.keypressed(key)
     elseif key == "r" then
         board = new_board(board_width, board_height)
         move_counter = move_counter + 1
+        send_event()
     elseif key == "f" then
         flip_board = not flip_board
     elseif key == "s" or key == "tab" then
@@ -476,11 +492,11 @@ function love.keypressed(key)
     elseif key == "c" then
         fen = generate_fen(board)
         love.system.setClipboardText(fen)
-        print(fen)
     elseif key == "v" then
         fen = love.system.getClipboardText()
         load_fen(board, fen)
         move_counter = move_counter + 1
+        send_event()
     end
 end
 
@@ -488,7 +504,7 @@ function love.mousepressed(x, y, button)
     local bx, by = get_coords(x, y)
     mouse_x = love.mouse.getX()
     mouse_y = love.mouse.getY()
-
+    
     if select_mode then
         if bx > #piece_selector[1] or by > #piece_selector or bx < 1 or by < 1 then
             select_mode = false
