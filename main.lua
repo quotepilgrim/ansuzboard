@@ -85,66 +85,6 @@ local function set_highlight(x, y)
     highlighted_squares[y][x] = not highlighted_squares[y][x]
 end
 
-local function move_piece(x, y)
-    if x > board_width or y > board_height or x < 1 or y < 1 then
-        grabbed_piece = ""
-        grabbed_x, grabbed_y = nil, nil
-        return
-    end
-
-    if grabbed_piece == "_x" then
-        grabbed_piece = ""
-    end
-
-    for i = 1, #board do
-        for j = 1, #board[1] do
-            highlighted_squares[i][j] = false
-            highlighted_move[i][j] = false
-        end
-    end
-
-    if drop_piece then
-        board[y][x] = grabbed_piece
-        highlighted_move[y][x] = true
-        grabbed_piece = ""
-        drop_piece = false
-        move_counter = move_counter + 1
-        send_event()
-    elseif grabbed_piece == "" then
-        grabbed_piece = board[y][x]
-        grabbed_x, grabbed_y = x, y
-    else
-        if x ~= grabbed_x or y ~= grabbed_y then
-            highlighted_move[y][x] = true
-            highlighted_move[grabbed_y][grabbed_x] = true
-        end
-        board[grabbed_y][grabbed_x] = ""
-        board[y][x] = grabbed_piece
-        grabbed_piece = ""
-        move_counter = move_counter + 1
-        send_event()
-    end
-
-    if grabbed_piece == "" then
-        grabbed_x, grabbed_y = nil, nil
-    end
-end
-
-local function draw_square(x, y, ox, oy, mode)
-    ox = ox or 0
-    oy = oy or 0
-    if mode == "flipped" then
-        x = #board[1] + 1 - x
-        y = #board + 1 - y
-    end
-    love.graphics.rectangle(
-        "fill",
-        (x - 1) * square_width + offset_x + ox,
-        (y - 1) * square_width + offset_y + oy,
-        square_width,
-        square_width
-    )
-end
 
 local function draw_image(image, x, y, ox, oy, mode)
     mode = mode or "board"
@@ -334,13 +274,75 @@ local function handle_event(dt)
     end
 end
 
-function send_event()
+local function send_event()
     if is_server then
         host:broadcast(generate_fen(board, true))
     elseif is_client then
         peer:send(generate_fen(board, true))
     end
 end
+
+local function move_piece(x, y)
+    if x > board_width or y > board_height or x < 1 or y < 1 then
+        grabbed_piece = ""
+        grabbed_x, grabbed_y = nil, nil
+        return
+    end
+
+    if grabbed_piece == "_x" then
+        grabbed_piece = ""
+    end
+
+    for i = 1, #board do
+        for j = 1, #board[1] do
+            highlighted_squares[i][j] = false
+            highlighted_move[i][j] = false
+        end
+    end
+
+    if drop_piece then
+        board[y][x] = grabbed_piece
+        highlighted_move[y][x] = true
+        grabbed_piece = ""
+        drop_piece = false
+        move_counter = move_counter + 1
+        send_event()
+    elseif grabbed_piece == "" then
+        grabbed_piece = board[y][x]
+        grabbed_x, grabbed_y = x, y
+    else
+        if x ~= grabbed_x or y ~= grabbed_y then
+            highlighted_move[y][x] = true
+            highlighted_move[grabbed_y][grabbed_x] = true
+        end
+        board[grabbed_y][grabbed_x] = ""
+        board[y][x] = grabbed_piece
+        grabbed_piece = ""
+        move_counter = move_counter + 1
+        send_event()
+    end
+
+    if grabbed_piece == "" then
+        grabbed_x, grabbed_y = nil, nil
+    end
+end
+
+local function draw_square(x, y, ox, oy, mode)
+    ox = ox or 0
+    oy = oy or 0
+    if mode == "flipped" then
+        x = #board[1] + 1 - x
+        y = #board + 1 - y
+    end
+    love.graphics.rectangle(
+        "fill",
+        (x - 1) * square_width + offset_x + ox,
+        (y - 1) * square_width + offset_y + oy,
+        square_width,
+        square_width
+    )
+end
+
 
 function love.load()
     if is_server then
