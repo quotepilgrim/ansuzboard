@@ -1,5 +1,5 @@
 local enet = require("enet")
-local host, peer, is_client, is_server, connected
+local host, peer, is_client, is_server, connected, highlight
 local ip = "localhost"
 local port = "8000"
 local board = {}
@@ -13,10 +13,9 @@ local square_width = math.min(width / board_width, height / board_height)
 local offset_x, offset_y = 0, 0
 local selector_offset_x, selector_offset_y = 0, 0
 local pieces = {}
-local highlight
 local grabbed_piece = ""
-local drop_piece = false
 local grabbed_x, grabbed_y
+local drop_piece = false
 local dragging = false
 local threshold = square_width * 0.1
 local select_mode = false
