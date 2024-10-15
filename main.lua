@@ -1,5 +1,5 @@
 local enet = require("enet")
-local host, peer, is_client, is_server
+local host, peer, is_client, is_server, connected
 local ip = "localhost"
 local port = "8000"
 local board = {}
@@ -22,7 +22,7 @@ local threshold = square_width * 0.1
 local select_mode = false
 local flip_board = false
 local mouse_x, mouse_y = 0, 0
-local last_fen
+local event_interval = 0
 local last_attempt = 0
 local reconnect_time = 3
 
@@ -84,7 +84,6 @@ local function set_highlight(x, y)
     grabbed_x = 0
     highlighted_squares[y][x] = not highlighted_squares[y][x]
 end
-
 
 local function draw_image(image, x, y, ox, oy, mode)
     mode = mode or "board"
@@ -239,7 +238,7 @@ end
 
 local function connect()
     if not connected then
-        peer = host:connect("localhost:" .. port)
+        peer = host:connect(ip .. ":" .. port)
         print("Attempting to connect...")
     end
 end
@@ -343,11 +342,10 @@ local function draw_square(x, y, ox, oy, mode)
     )
 end
 
-
 function love.load()
     if is_server then
         love.window.setTitle("Ansuzboard (Server)")
-        host = enet.host_create("localhost:" .. port)
+        host = enet.host_create(ip .. ":" .. port)
         print("Server started...")
     elseif is_client then
         love.window.setTitle("Ansuzboard (Client)")
@@ -379,7 +377,6 @@ function love.load()
     board = new_board(board_width, board_height)
 end
 
-local event_interval = 0
 function love.update(dt)
     if love.mouse.isDown(1, 2, 3) and distance(mouse_x, mouse_y, love.mouse.getX(), love.mouse.getY()) > threshold then
         dragging = true
@@ -389,7 +386,7 @@ function love.update(dt)
     elseif not love.mouse.isDown(1) then
         dragging = false
     end
-    if (dragging or drop_piece) then
+    if dragging or drop_piece then
         select_mode = false
         return
     end
@@ -514,7 +511,7 @@ function love.mousepressed(x, y, button)
     local bx, by = get_coords(x, y)
     mouse_x = love.mouse.getX()
     mouse_y = love.mouse.getY()
-    
+
     if select_mode then
         if bx > #piece_selector[1] or by > #piece_selector or bx < 1 or by < 1 then
             select_mode = false
